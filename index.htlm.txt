@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>FinKids Super App</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #3498db; --secondary: #2ecc71; --accent: #f1c40f; }
+        body { font-family: 'Comic Sans MS', sans-serif; background: #f0f4f8; padding: 20px; }
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: 10px auto; max-width: 600px; text-align: center; }
+        .hidden { display: none; }
+        .flex { display: flex; justify-content: space-around; gap: 10px; }
+        .barra-progresso { background: #eee; border-radius: 10px; height: 20px; width: 100%; margin: 10px 0; overflow: hidden; }
+        .progresso-preenchido { background: var(--secondary); height: 100%; width: 0%; transition: 1s; }
+        button { border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-cofre { background: var(--accent); color: #333; }
+        .btn-relatorio { background: #9b59b6; margin-top: 20px; }
+    </style>
+</head>
+<body onload="carregarDados()">
+
+    <div id="telaLogin" class="card">
+        <h1>🚀 FinKids</h1>
+        <input type="text" id="inputNome" placeholder="Teu nome..." style="padding:10px; width:70%;">
+        <button onclick="fazerLogin()" style="background:var(--primary)">Entrar</button>
+    </div>
+
+    <div id="telaApp" class="hidden">
+        <div class="card">
+            <h2>Olá, <span id="nomeExibicao"></span>! 👋</h2>
+            <div class="flex">
+                <div><small>Saldo Disponível</small><br><strong style="font-size:1.5em; color:var(--secondary)">₣ <span id="saldo">0</span></strong></div>
+                <div><small>No Cofre 🔒</small><br><strong style="font-size:1.5em; color:var(--accent)">₣ <span id="saldoCofre">0</span></strong></div>
+            </div>
+            <hr>
+            <div class="flex">
+                <button onclick="moverParaCofre()" class="btn-cofre">Guardar no Cofre</button>
+                <button onclick="adicionarMoedas(20)" style="background:var(--primary)">Ganhar ₣20</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🎯 Minha Meta: <span id="nomeMeta">---</span></h3>
+            <div class="barra-progresso"><div id="barraMeta" class="progresso-preenchido"></div></div>
+            <p><span id="msgMeta">Define uma meta abaixo!</span></p>
+            <input type="text" id="inputMetaNome" placeholder="O que queres comprar?">
+            <input type="number" id="inputMetaValor" placeholder="Preço ₣">
+            <button onclick="definirMeta()" style="background:var(--primary); margin-top:5px;">Definir Meta</button>
+        </div>
+
+        <div class="card">
+            <canvas id="meuGrafico"></canvas>
+            <button onclick="gerarRelatorio()" class="btn-relatorio">📜 Gerar Relatório do Finny</button>
+            <button onclick="location.reload()" style="background:#95a5a6">Sair</button>
+        </div>
+    </div>
+
+    <script>
+        let user = null;
+        let db = JSON.parse(localStorage.getItem("finkids_db")) || {};
+        let grafico;
+
+        function fazerLogin() {
+            const nome = document.getElementById('inputNome').value.trim().toLowerCase();
+            if (!nome) return;
+            user = nome;
+            if (!db[user]) {
+                db[user] = { saldo: 50, cofre: 0, metaNome: "", metaValor: 0, historico: [50] };
+            }
+            document.getElementById('telaLogin').classList.add('hidden');
+            document.getElementById('telaApp').classList.remove('hidden');
+            document.getElementById('nomeExibicao').innerText = user;
+            atualizarTudo();
+            inicializarGrafico();
+        }
+
+        function adicionarMoedas(v) {
+            db[user].saldo += v;
+            db[user].historico.push(db[user].saldo + db[user].cofre);
+            atualizarTudo();
+        }
+
+        function moverParaCofre() {
+            if (db[user].saldo >= 10) {
+                db[user].saldo -= 10;
+                db[user].cofre += 10;
+                atualizarTudo();
+                alert("Moedas guardadas com sucesso! Estão seguras e a render.");
+            }
+        }
+
+        function definirMeta() {
+            db[user].metaNome = document.getElementById('inputMetaNome').value;
+            db[user].metaValor = parseFloat(document.getElementById('inputMetaValor').value);
+            atualizarTudo();
+        }
+
+        function atualizarTudo() {
+            const dados = db[user];
+            document.getElementById('saldo').innerText = dados.saldo.toFixed(2);
+            document.getElementById('saldoCofre').innerText = dados.cofre.toFixed(2);
+            
+            // Lógica da Meta
+            if (dados.metaValor > 0) {
+                const perc = Math.min((dados.saldo / dados.metaValor) * 100, 100);
+                document.getElementById('nomeMeta').innerText = dados.metaNome;
+                document.getElementById('barraMeta').style.width = perc + "%";
+                document.getElementById('msgMeta').innerText = `Estás a ${perc.toFixed(0)}% do teu objetivo!`;
+            }
+
+            localStorage.setItem("finkids_db", JSON.stringify(db));
+            if (grafico) atualizarGrafico();
+        }
+
+        function gerarRelatorio() {
+            const r = db[user];
+            const texto = `📜 RELATÓRIO FINNY - INVESTIDOR ${user.toUpperCase()}\n` +
+                          `------------------------------\n` +
+                          `Saldo Total: ₣ ${(r.saldo + r.cofre).toFixed(2)}\n` +
+                          `No Cofre: ₣ ${r.cofre.toFixed(2)}\n` +
+                          `Meta: ${r.metaNome} (${((r.saldo/r.metaValor)*100).toFixed(0)}%)\n` +
+                          `Dica do Finny: Continua a poupar para o teu futuro! 🚀`;
+            alert(texto);
+        }
+
+        // ... (Funções de gráfico iguais às anteriores) ...
+        function inicializarGrafico() {
+            const ctx = document.getElementById('meuGrafico').getContext('2d');
+            grafico = new Chart(ctx, { type: 'line', data: { labels: db[user].historico.map((_,i)=>i+1), datasets: [{ label: 'Evolução Total', data: db[user].historico, borderColor: '#3498db' }] } });
+        }
+        function atualizarGrafico() {
+            grafico.data.labels = db[user].historico.map((_,i)=>i+1);
+            grafico.data.datasets[0].data = db[user].historico;
+            grafico.update();
+        }
+    </script>
+</body>
+</html>
